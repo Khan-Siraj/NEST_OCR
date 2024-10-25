@@ -1,11 +1,34 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UploadedFile, UseInterceptors, HttpCode, InternalServerErrorException, HttpStatus } from '@nestjs/common';
 import { OcrService } from './ocr.service';
 import { CreateOcrDto } from './dto/create-ocr.dto';
 import { UpdateOcrDto } from './dto/update-ocr.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 
-@Controller('ocr')
+@Controller('api/ocr')
 export class OcrController {
   constructor(private readonly ocrService: OcrService) {}
+
+  @Post('file')
+  @UseInterceptors(FileInterceptor('file',{
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+      },
+    }),
+  }))
+  uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('File is not uploaded');
+    }
+
+    // You can access file properties like file.originalname, file.buffer, etc.
+    return {
+      filename: file.originalname,
+      size: file.size,
+    };
+  }
 
   @Post()
   create(@Body() createOcrDto: CreateOcrDto) {
@@ -16,13 +39,28 @@ export class OcrController {
   findAll() {
     return this.ocrService.findAll();
   }
-  
-  @Get('read-ocr')
-  async getOcr(){
-    console.log("Reading OCR")
-    let res = await this.ocrService.ocrImage()
-    console.log({res})
-    return res
+
+  @UseInterceptors(FileInterceptor('file',{
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+      },
+    }),
+  }))
+  @Post('process-ocr')
+  @HttpCode(HttpStatus.OK)
+  async getOcr(@UploadedFile() file: Express.Multer.File){
+    if (!file) {
+      throw new BadRequestException('File is not uploaded');
+    }
+    let {data,error} = await this.ocrService.ocrImage(file)
+
+    if(error){
+      throw new InternalServerErrorException(error)
+    }
+
+    return data
   }
 
   @Get(':id')
