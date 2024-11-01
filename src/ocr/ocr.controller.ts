@@ -4,6 +4,7 @@ import { CreateOcrDto } from './dto/create-ocr.dto';
 import { UpdateOcrDto } from './dto/update-ocr.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { ResponseData } from 'src/shared/response.data';
 
 @Controller('api/ocr')
 export class OcrController {
@@ -18,16 +19,21 @@ export class OcrController {
       },
     }),
   }))
+  @HttpCode(HttpStatus.OK)
   uploadFile(@UploadedFile() file: Express.Multer.File) {
+    const response = new ResponseData()
     if (!file) {
-      throw new BadRequestException('File is not uploaded');
+      response.success = false
+      response.error = 'File is not uploaded'
+      throw new BadRequestException(response);
     }
-
-    // You can access file properties like file.originalname, file.buffer, etc.
-    return {
+    response.success = true;
+    response.data = {
       filename: file.originalname,
       size: file.size,
     };
+    // You can access file properties like file.originalname, file.buffer, etc.
+    return response
   }
 
   @Post()
@@ -51,16 +57,21 @@ export class OcrController {
   @Post('process-ocr')
   @HttpCode(HttpStatus.OK)
   async getOcr(@UploadedFile() file: Express.Multer.File){
-    if (!file) {
-      throw new BadRequestException('File is not uploaded');
+    const response = new ResponseData()
+    try {
+      if (!file) {
+        response.success = false
+        response.error = 'File is not uploaded'
+        throw new BadRequestException(response);
+      }
+      let data = await this.ocrService.ocrImage(file)
+      response.success = true;
+      response.data = data;
+      return response
+    } catch (error) {
+      throw error
     }
-    let {data,error} = await this.ocrService.ocrImage(file)
-
-    if(error){
-      throw new InternalServerErrorException(error)
-    }
-
-    return data
+    
   }
 
   @Get(':id')
